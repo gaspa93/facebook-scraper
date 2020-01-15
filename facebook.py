@@ -1,8 +1,11 @@
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from datetime import datetime
 import time
+import logging
 
 URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
@@ -12,8 +15,8 @@ class FacebookScraper:
 
     def __init__(self, credentials):
         self.login_ = credentials
-        self.driver = self.get_driver()
-        self.logger = self.get_logger()
+        self.driver = self.__get_driver()
+        self.logger = self.__get_logger()
 
 
     # login to your account
