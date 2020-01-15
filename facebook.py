@@ -10,6 +10,7 @@ class FacebookScraper:
         self.login_ = credentials
         self.logger = self.get_logger()
 
+
     # login to your account
     def login(self):
         fb_login = self.login_
@@ -26,6 +27,7 @@ class FacebookScraper:
             return False
 
         return True
+
 
     # sort reviews by date
     def sort_by_date(self, username):
@@ -44,16 +46,6 @@ class FacebookScraper:
 
 
     def get_reviews(self, offset):
-
-        '''
-        try:
-            n_total_reviews = int(self.driver.find_element_by_css_selector('span._67l2').text.split(' ')[5].replace('.',''))
-        except:
-            self.logger.warn('{}: Not found total number of reviews: no review section or no review available'.format(username))
-            return 1
-
-        n_reviews_loaded = len(self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper'))
-        '''
 
         # scroll to bottom of page
         self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
@@ -111,44 +103,8 @@ class FacebookScraper:
                       'n_followers': followers,
                       'timestamp': timestamp}
 
-        self.db['user'].insert_one(fb_account)
+        return fb_account
 
-        return 0
-
-    def get_engagement(self, metadata, min_timestamp):
-        profile = metadata['fb_profile']
-        self.driver.get(URL_POSTS.format(username))
-
-        # check date of bottom post
-        bottom_date = self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper')[
-            -1].find_element_by_css_selector('abbr._5ptz').get_attribute('title')
-        curr_last_date = datetime.strptime(bottom_date, '%d/%m/%y, %H:%M')
-
-        n_scrolls = 0
-        while curr_last_date >= min_timestamp and n_scrolls < MAX_SCROLLS:
-
-            # scroll to bottom of page to trigger ajax call
-            self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
-
-            # wait for other reviews to load
-            time.sleep(3)
-
-            # check date of bottom post
-            bottom_date = self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper')[
-                -1].find_element_by_css_selector('abbr._5ptz').get_attribute('title')
-            curr_last_date = datetime.strptime(bottom_date, '%d/%m/%y, %H:%M')
-
-            n_scrolls += 1
-
-        resp = BeautifulSoup(self.driver.page_source, 'html.parser')
-
-        # get posts list
-        post_list = resp.find_all('div', class_='_5pcr userContentWrapper')
-        count = 0
-        for idx, post in enumerate(post_list):
-            count += self.__get_post_engagement(post, metadata, min_timestamp)
-
-        return count
 
     def get_content(self, metadata):
         fb_profile = metadata['fb_profile']
@@ -195,7 +151,6 @@ class FacebookScraper:
 
     # TODO: hashtag search
     # def get_post_by_tag(self, tag)
-
 
     def __get_review_data(self, r):
 
@@ -369,84 +324,6 @@ class FacebookScraper:
 
         return 0
 
-    # TODO: not working, update
-    def __get_post_from_tag(self, p, tag):
-
-        id = re.search("\"id\":(\d+)", p['data-bt']).group(1)
-        # id format id="feed_subtitle_580620952460311:9:0"
-        # id = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id'].split('_')[2].split(':')[0].encode('utf-8')
-        id_post = bson.int64.Int64(id)
-
-        old_post = self.db['tag'].find_one({'id_post': id_post})
-        post = {}
-        if old_post is None:
-
-            # date and timestamp
-            # timestamp = p.find('abbr', class_='_5ptz')['data-utime']
-            date = datetime.strptime(p.find('abbr', class_='_5ptz')['title'], '%d/%m/%y, %H:%M')
-            timestamp = date
-            date = str(date)  # db consistency
-            post['id_post'] = id_post
-            post['date'] = date
-            post['timestamp'] = timestamp
-
-            # image url and description
-            try:
-                img = p.find('img', class_='scaledImageFitWidth img')
-                img_url = img['src'].encode('utf-8')
-                img_desc = filterString(img['alt'])
-
-                post['img_url'] = img_url
-                post['img_desc'] = img_desc
-            except Exception as e:
-                # print 'Image not found:', e
-                img_url = None
-                img_desc = None
-
-            reactions = self.__get_reactions(p)
-            shares = self.__get_shares(p)
-            comments = self.__get_comments(p)
-
-            if len(reactions) > 0:
-                post['reactions'] = reactions
-
-            post['comments'] = comments
-            post['shares'] = shares
-
-            # content of post
-            text_div = p.find('div', class_='_5pbx userContent _3576')
-            if text_div is not None:
-                caption = filterString(text_div.text)
-                post['caption'] = caption
-            else:
-                caption = None
-
-            # user info
-            try:
-                username = filterString(p.find('a', class_='profileLink').text)
-            except:
-                username = filterString(p.find('a', class_=None).text)
-
-            user_url = p.find('a', class_=None)['href']
-
-            post['username'] = username
-            post['user_url'] = user_url
-            post['hashtag'] = [tag]
-
-            try:
-                self.db['tag'].insert_one(post)
-            except Exception as e:
-                    self.logger.warn('MongoDB Error: ' + type(e).__name__)
-                    return 0
-            return 1
-
-        else:
-            if tag not in old_post['hashtag']:
-                res = self.db['tag'].update_one({'id_post': old_post['id_post']}, {'$push': {'hashtag': tag}}, upsert=False)
-                self.logger.warn('Post already present: updated hashtag list')
-
-                return 1
-
     # load review complete text
     def __expand_content(self):
         try:
@@ -458,33 +335,6 @@ class FacebookScraper:
         except:
             pass
 
-    # return list of review ids in the page
-    def __page_ids_r(self):
-        ids = []
-        for post in self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper'):
-            ids.append(int(
-                post.find_element_by_css_selector('div._5pcp._5lel._2jyu._232_').get_attribute('id').split(':')[0].split('_')[2]))
-
-        return ids
-
-    # return list of post ids in the page
-    def __page_ids_p(self):
-        ids = []
-        for post in self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper'):
-            try:
-                ids.append(int(post.find_element_by_css_selector('div._5pcp._5lel._2jyu._232_').get_attribute('id').split(';')[1]))
-            except:
-                pass
-        return ids
-
-    # check if bottom of the page is reached
-    def __is_bottom_page(self):
-        try:
-            bottom_div = self.driver.find_element_by_xpath('//div[@class=\'phm _64f\']')
-            return True
-
-        except NoSuchElementException:
-            return False
 
     def __get_shares(self, p):
         try:

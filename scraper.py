@@ -18,5 +18,7 @@ if __name__ == '__main__':
 
     if args.review:
         if scraper.login():
+            # sort by date reviews of target public account
+            scraper.sort_by_date(args.u)
             reviews = scraper.get_reviews()
             print(reviews)
