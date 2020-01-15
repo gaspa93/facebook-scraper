@@ -6,10 +6,13 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import time
 import logging
+import re
 
 URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
 URL_POSTS = "http://www.facebook.com/{}/posts"
+
+rating_regex = re.compile('_51mq\simg(\ssp_(.){11}\ssx_(.){6})?')
 
 class FacebookScraper:
 
