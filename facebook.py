@@ -106,35 +106,16 @@ class FacebookScraper:
         return fb_account
 
 
-    def get_content(self, metadata):
-        fb_profile = metadata['fb_profile']
-        id_2 = metadata['id_2']
+    def get_content(self, username, offset):
 
-        self.driver.get("http://www.facebook.com/" + fb_profile + "/posts")
-        self.__expand_content()
+        if offset == 0:
+            self.driver.get(URL_POSTS.format(username))
 
-        bottom = self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper')[-1]
-        bottom_date = bottom.find_element_by_css_selector('abbr._5ptz').get_attribute('title')
-        curr_last_date = datetime.strptime(bottom_date, '%d/%m/%y, %H:%M')
+        # scroll to bottom of page
+        self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
 
-        # check if list of post ids is present in DB
-        p_ids = self.__page_ids_p()
-        got_old_posts = self.db['post'].find_one({'id_2': id_2, 'id_post': {'$in': p_ids}})
-        while got_old_posts is None and curr_last_date >= MIN_DATE_REVIEW:
-            # scroll to bottom of page
-            self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
-
-            # wait for other reviews to load
-            time.sleep(3)
-
-            # check date of bottom post
-            bottom = self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper')[-1]
-            bottom_date = bottom.find_element_by_css_selector('abbr._5ptz').get_attribute('title')
-            curr_last_date = datetime.strptime(bottom_date, '%d/%m/%y, %H:%M')
-
-            # check ids of post in the page
-            p_ids = self.__page_ids_p()
-            got_old_posts = self.db['post'].find_one({'id_2': id_2, 'id_post': {'$in': p_ids}})
+        # wait for other reviews to load
+        time.sleep(6)
 
         # expand text of posts
         self.__expand_content()
@@ -143,11 +124,16 @@ class FacebookScraper:
 
         # get posts list
         post_list = resp.find_all('div', class_='_5pcr userContentWrapper')
-        new_posts = 0
+        parsed_posts = []
         for idx, post in enumerate(post_list):
-            new_posts = new_posts + self.__get_post_data(post, metadata)
+            # save the ones just loaded with the scroll
+            if idx >= offset:
+                p = self.__get_post_data(post)
+                if p != {}:
+                    parsed_posts.append()
 
-        self.logger.info('POST - {}: {}'.format(metadata['fb_profile'], new_posts))
+        return parsed_posts
+
 
     # TODO: hashtag search
     # def get_post_by_tag(self, tag)
@@ -205,124 +191,74 @@ class FacebookScraper:
         return review
 
 
-
-    def __get_post_engagement(self, p, metadata, min_timestamp):
-        id_mibact = int(metadata['id_mibact'])
-        id_2 = int(metadata['id_2'])
-        max_timestamp = min_timestamp + relativedelta(months=1)
-
-        pinned = p.find('i', class_='_5m7w img sp_bjbQDwUU8b8 sx_81fd46')
-        id = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id']
-        date = datetime.strptime(p.find('abbr', class_='_5ptz')['title'], '%d/%m/%y, %H:%M')
-
-        # pinned elements and posts in the comments are skipped
-        # also posts out of the time window are not monitored
-        if pinned is None and ':' not in id and date >= min_timestamp and date < max_timestamp:
-            id_post = id.split(';')[1]
-
-            reactions = self.__get_reactions(p)
-            shares = self.__get_shares(p)
-            comments = self.__get_comments(p)
-
-            t = datetime.now()
-            curr_date = t.strftime('%Y-%m-%d %H:%M:%S')
-
-            # db insert
-            id_post = bson.int64.Int64(id_post)
-            self.db['comment'].insert_one({'id_mibact': id_mibact, 'id_2': id_2, 'id_post': id_post,
-                                           'date': curr_date, 'count': comments, 'timestamp': t})
-            self.db['share'].insert_one({'id_mibact': id_mibact, 'id_2': id_2, 'id_post': id_post,
-                                        'date': curr_date, 'count': shares, 'timestamp': t})
-            self.db['reaction'].insert_one({'id_mibact': id_mibact, 'id_2': id_2, 'id_post': id_post,
-                                           'date': curr_date, 'reactions': reactions, 'timestamp': t})
-
-            return 1
-        return 0
-
-    def __get_post_data(self, p, metadata):
+    def __get_post_data(self, p):
 
         pinned = p.find('i', class_='_5m7w img sp_bjbQDwUU8b8 sx_81fd46')
 
         # id format id="feed_subtitle_57579540619;580620952460311;;9" -> .split(';')[1]
         id = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id'].encode('utf-8')
-        date = datetime.strptime(p.find('abbr', class_='_5ptz')['title'], '%d/%m/%y, %H:%M')
 
         # pinned elements are skipped
-        # also posts out of the timespan are not saved, nor the ones already scraped
-        if pinned is None and date >= MIN_DATE_REVIEW and ':' not in id:
+        if pinned is None and ':' not in id:
 
-            id_post = bson.int64.Int64(id.split(';')[1])
-            is_old_post = self.db['post'].find_one({'id_post': id_post})
             post = {}
-            if is_old_post is None:
-                # date and timestamp
-                # timestamp = p.find('abbr', class_='_5ptz')['data-utime']
-                timestamp = date
-                date = str(date)  # db consistency
-                post['id_post'] = id_post
-                post['date'] = date
-                post['timestamp'] = timestamp
 
-                # image url and description
-                try:
-                    img = p.find('img', class_='scaledImageFitWidth img')
-                    img_url = img['src'].encode('utf-8')
-                    img_desc = filterString(img['alt'])
+            id_post = int(id.split(';')[1])
+            date = datetime.strptime(p.find('abbr', class_='_5ptz')['title'], '%d/%m/%y, %H:%M')
+            timestamp = date
+            date = str(date)  # db consistency
 
-                    post['img_url'] = img_url
-                    post['img_desc'] = img_desc
-                except Exception as e:
-                    img_url = None
-                    img_desc = None
+            post['id_post'] = id_post
+            post['date'] = date
+            post['timestamp'] = timestamp
 
-                reactions = self.__get_reactions(p)
-                shares = self.__get_shares(p)
-                comments = self.__get_comments(p)
+            # image url and description
+            try:
+                img = p.find('img', class_='scaledImageFitWidth img')
+                img_url = img['src']  #.encode('utf-8')
+                img_desc = filterString(img['alt'])
 
-                if len(reactions) > 0:
-                    post['reactions'] = reactions
+                post['img_url'] = img_url
+                post['img_desc'] = img_desc
+            except Exception as e:
+                img_url = None
+                img_desc = None
 
-                post['comments'] = comments
-                post['shares'] = shares
+            reactions = self.__get_reactions(p)
+            shares = self.__get_shares(p)
+            comments = self.__get_comments(p)
 
-                # content of post
-                text_div = p.find('div', class_='_5pbx userContent _3576')
-                if text_div is not None:
-                    caption = filterString(text_div.text)
-                    post['caption'] = caption
+            if len(reactions) > 0:
+                post['reactions'] = reactions
+
+            post['comments'] = comments
+            post['shares'] = shares
+
+            # content of post
+            text_div = p.find('div', class_='_5pbx userContent _3576')
+            if text_div is not None:
+                caption = filterString(text_div.text)
+                post['caption'] = caption
+            else:
+                caption = None
+
+            # check presence of event
+            try:
+                event = p.find('span', class_='fcg')
+                links = event.find_all('a', class_='profileLink')
+                # print links
+                if len(links) > 1:
+                    event_link = links[1]['href']
                 else:
-                    caption = None
-
-                # check presence of event
-                try:
-                    event = p.find('span', class_='fcg')
-                    links = event.find_all('a', class_='profileLink')
-                    # print links
-                    if len(links) > 1:
-                        event_link = links[1]['href']
-                    else:
-                        event_link = None
-                except:
                     event_link = None
+            except:
+                event_link = None
 
-                post['event'] = event_link
+            post['event'] = event_link
 
-                id_mibact = int(metadata['id_mibact'])
-                id_2 = int(metadata['id_2'])
-                fb_profile = metadata['fb_profile']
-                post['id_mibact'] = id_mibact
-                post['id_2'] = id_2
-                post['fb_profile'] = fb_profile
+            return post
 
-                try:
-                    self.db['post'].insert_one(post)
-                except Exception as e:
-                    self.logger.warn('MongoDB Error: ' + type(e).__name__)
-                    return 0
-
-                return 1
-
-        return 0
+        return {}
 
     # load review complete text
     def __expand_content(self):
