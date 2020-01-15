@@ -1,10 +1,12 @@
+
+URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
+URL_POSTS = "http://www.facebook.com/{}/posts"
 
 class FacebookScraper:
 
-    def __init__(self, d, db_client, credentials, logger):
-        self.driver = d
-        self.db = db_client
+    def __init__(self, driver, credentials):
+        self.driver = driver
         self.login_ = credentials
         self.logger = self.get_logger()
 
@@ -74,12 +76,9 @@ class FacebookScraper:
         return parsed_reviews
 
 
-    def get_account(self, metadata, date):
-        id_mibact = int(metadata['id_mibact'])
-        id_2 = int(metadata['id_2'])
-        fb_profile = metadata['fb_profile']
+    def get_account(self, username):
 
-        self.driver.get("http://www.facebook.com/" + fb_profile)
+        self.driver.get(URL_ACCOUNT.format(username))
         resp = BeautifulSoup(self.driver.page_source, 'html.parser')
 
         # official page data
@@ -118,7 +117,7 @@ class FacebookScraper:
 
     def get_engagement(self, metadata, min_timestamp):
         profile = metadata['fb_profile']
-        self.driver.get("http://www.facebook.com/" + profile + "/posts")
+        self.driver.get(URL_POSTS.format(username))
 
         # check date of bottom post
         bottom_date = self.driver.find_elements_by_css_selector('div._5pcr.userContentWrapper')[
