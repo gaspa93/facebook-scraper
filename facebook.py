@@ -1,3 +1,8 @@
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from bs4 import BeautifulSoup
+from datetime import datetime
+import time
 
 URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
@@ -5,9 +10,9 @@ URL_POSTS = "http://www.facebook.com/{}/posts"
 
 class FacebookScraper:
 
-    def __init__(self, driver, credentials):
-        self.driver = driver
+    def __init__(self, credentials):
         self.login_ = credentials
+        self.driver = self.get_driver()
         self.logger = self.get_logger()
 
 
@@ -281,6 +286,7 @@ class FacebookScraper:
 
         return shares
 
+
     def __get_comments(self, p):
         try:
             comments = int(p.find('a', class_='_3hg- _42ft').text.split(': ')[1])
@@ -289,6 +295,7 @@ class FacebookScraper:
             self.logger.warn('Comment element not found.')
 
         return comments
+
 
     def __get_reactions(self, p):
         reactions_elem = p.find_all('a', class_='_1n9l')
@@ -331,3 +338,16 @@ class FacebookScraper:
         logger.addHandler(fh)
 
         return logger
+
+
+    def __get_driver(self, debug=False):
+        options = Options()
+        if not debug:
+            options.add_argument("--headless")
+        options.add_argument("--window-size=1366,768")
+        options.add_argument("--disable-notifications")
+        options.add_argument("--lang=en")
+        options.add_argument("--no-sandbox")
+        input_driver = webdriver.Chrome(chrome_options=options)
+
+        return input_driver
