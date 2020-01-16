@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 import logging
 import re
+import traceback
 
 URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
@@ -18,11 +19,13 @@ class FacebookScraper:
 
     def __init__(self, credentials):
         self.login_ = credentials
-        self.driver = self.__get_driver()
+        self.driver = self.__get_driver(debug=True)
         self.logger = self.__get_logger()
+
 
     def __enter__(self):
         return self
+
 
     def __exit__(self, exc_type, exc_value, tb):
         if exc_type is not None:
@@ -32,6 +35,7 @@ class FacebookScraper:
         self.driver.quit()
 
         return True
+
 
     # login to your account
     def login(self):
@@ -137,7 +141,7 @@ class FacebookScraper:
         self.driver.execute_script('window.scrollTo(0, document.body.scrollHeight)')
 
         # wait for other reviews to load
-        time.sleep(6)
+        time.sleep(5)
 
         # expand text of posts
         self.__expand_content()
@@ -284,14 +288,13 @@ class FacebookScraper:
 
     # load review complete text
     def __expand_content(self):
-        try:
-            expand_bts = self.driver.find_elements_by_xpath('//span[@class=\'see_more_link_inner\']')
-            for bt in expand_bts:
+        expand_bts = self.driver.find_elements_by_xpath('//span[@class=\'see_more_link_inner\']')
+        for bt in expand_bts:
+            try:
                 bt.click()
-
-            time.sleep(5)
-        except:
-            pass
+                time.sleep(1)
+            except:
+                pass
 
 
     def __get_shares(self, p):
