@@ -2,6 +2,32 @@ from facebook import FacebookScraper
 import argparse
 import json
 
+
+def get_reviews(scraper, username, n):
+    # sort by date reviews of target public account
+    scraper.sort_by_date(username)
+
+    reviews = []
+    n_reviews = 0
+    while n_reviews < n:
+        curr_reviews = scraper.get_reviews(n_reviews)
+        reviews = reviews + curr_reviews
+        n_reviews = len(reviews)
+
+    return reviews
+
+
+def get_posts(scraper, username, n):
+    posts = []
+    n_posts = 0
+    while n_posts < n:
+        curr_posts = scraper.get_content(username, n_posts)
+        posts = posts + curr_posts
+        n_posts = len(posts)
+
+    return posts
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Facebook posts, reviews and user scraper.')
     parser.add_argument('--N', type=int, default=10, help='Number of posts/reviews to scrape')
@@ -25,12 +51,10 @@ if __name__ == '__main__':
 
             # review data
             elif args.review:
-                # sort by date reviews of target public account
-                scraper.sort_by_date(args.u)
-                reviews = scraper.get_reviews(0)
-                print(reviews)
+                rlist = get_reviews(scraper, args.u, args.N)
+                print(rlist)
 
             # post data
             else:
-                posts = scraper.get_content(args.u, 0)
-                print(posts)
+                plist = get_posts(scraper, args.u, args.N)
+                print(plist)
