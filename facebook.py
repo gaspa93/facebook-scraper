@@ -102,10 +102,13 @@ class FacebookScraper:
         # official page data
         # some pages do not have ratings and reviews: default to 0 for these fields
         try:
-            overall_rating = resp.find('span', class_='_2w0a').text.split(' ')[0].replace(',', '.')
-            reviews = int(resp.find('span', class_='_2w0b').text.split(' ')[5].replace(',', ''))
+            overall_rating = float(resp.find('span', class_='_2w0a').text.split(' ')[0].replace(',', '.'))
         except:
             overall_rating = 0
+
+        try:
+            reviews = int(resp.find('span', class_='_2w0b').text.split(' ')[5].replace('.', '').replace(',', ''))
+        except:
             reviews = 0
 
         other = list(resp.find_all('div', class_='_4bl9'))
