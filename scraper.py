@@ -14,14 +14,13 @@ if __name__ == '__main__':
 
     # ig account credentials (needed for posts, not for users data)
     fb_credentials = json.load(open('credentials.json', 'r'))
-    scraper = FacebookScraper(fb_credentials)
-
-    if scraper.login():
-        if args.review:
-            # sort by date reviews of target public account
-            scraper.sort_by_date(args.u)
-            reviews = scraper.get_reviews(0)
-            print(reviews)
-        else:
-            posts = scraper.get_content(args.u, 0)
-            print(posts)
+    with FacebookScraper(fb_credentials) as scraper:
+        if scraper.login():
+            if args.review:
+                # sort by date reviews of target public account
+                scraper.sort_by_date(args.u)
+                reviews = scraper.get_reviews(0)
+                print(reviews)
+            else:
+                posts = scraper.get_content(args.u, 0)
+                print(posts)
