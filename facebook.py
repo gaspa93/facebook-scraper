@@ -169,7 +169,7 @@ class FacebookScraper:
         # content of review, if any
         text_div = r.find('div', class_='_5pbx userContent _3576')
         try:
-            caption = filterString(text_div.text)
+            caption = self.__filterString(text_div.text)
         except:
             caption = ''
         review['caption'] = caption
@@ -206,8 +206,8 @@ class FacebookScraper:
 
         pinned = p.find('i', class_='_5m7w img sp_bjbQDwUU8b8 sx_81fd46')
 
-        # id format id="feed_subtitle_57579540619;580620952460311;;9" -> .split(';')[1]
-        id = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id'].encode('utf-8')
+        # id format id="feed_subtitle_57579540619;580620952460311;;9"
+        id = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id']
 
         # pinned elements are skipped
         if pinned is None and ':' not in id:
@@ -248,7 +248,7 @@ class FacebookScraper:
             # content of post
             text_div = p.find('div', class_='_5pbx userContent _3576')
             if text_div is not None:
-                caption = filterString(text_div.text)
+                caption = self.__filterString(text_div.text)
                 post['caption'] = caption
             else:
                 caption = None
@@ -357,3 +357,7 @@ class FacebookScraper:
         input_driver = webdriver.Chrome(chrome_options=options)
 
         return input_driver
+
+
+    def __filterString(self, str):
+        return str.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ')
