@@ -21,6 +21,17 @@ class FacebookScraper:
         self.driver = self.__get_driver()
         self.logger = self.__get_logger()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, tb):
+        if exc_type is not None:
+            traceback.print_exception(exc_type, exc_value, tb)
+
+        self.driver.close()
+        self.driver.quit()
+
+        return True
 
     # login to your account
     def login(self):
@@ -141,7 +152,7 @@ class FacebookScraper:
             if idx >= offset:
                 p = self.__get_post_data(post)
                 if p != {}:
-                    parsed_posts.append()
+                    parsed_posts.append(p)
 
         return parsed_posts
 
