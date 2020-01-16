@@ -16,11 +16,19 @@ if __name__ == '__main__':
     fb_credentials = json.load(open('credentials.json', 'r'))
     with FacebookScraper(fb_credentials) as scraper:
         if scraper.login():
+
+            # account metadata
+            account = scraper.get_account(args.u)
+            print(account)
+
+            # review data
             if args.review:
                 # sort by date reviews of target public account
                 scraper.sort_by_date(args.u)
                 reviews = scraper.get_reviews(0)
                 print(reviews)
+
+            # post data
             else:
                 posts = scraper.get_content(args.u, 0)
                 print(posts)

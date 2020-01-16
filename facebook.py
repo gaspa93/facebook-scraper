@@ -19,7 +19,7 @@ class FacebookScraper:
 
     def __init__(self, credentials):
         self.login_ = credentials
-        self.driver = self.__get_driver(debug=True)
+        self.driver = self.__get_driver()
         self.logger = self.__get_logger()
 
 
@@ -118,16 +118,13 @@ class FacebookScraper:
             if 'Follower' in d.text:
                 followers = int(d.text.split(' ')[1].replace('.', ''))
 
-        timestamp = datetime.strptime(date, '%Y-%m-%d')
-        fb_account = {'id_mibact': id_mibact,
-                      'id_2': id_2,
-                      'fb_profile': fb_profile,
-                      'date': date,
+        fb_account = {
+                      'fb_profile': username,
                       'n_reviews': reviews,
                       'overall_rating': overall_rating,
                       'n_likes': likes,
-                      'n_followers': followers,
-                      'timestamp': timestamp}
+                      'n_followers': followers
+                      }
 
         return fb_account
 
@@ -263,7 +260,7 @@ class FacebookScraper:
             # content of post
             text_div = p.find('div', class_='_5pbx userContent _3576')
             if text_div is not None:
-                caption = self.__filterString(text_div.text)
+                caption = self.__filterString(text_div.text).replace('Altro...','') # even if click to expand, this text is appended at the end
                 post['caption'] = caption
             else:
                 caption = None
