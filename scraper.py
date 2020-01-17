@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--u', type=str, default='museoegizio', help='Target account')
     parser.add_argument('--review', dest='review', action='store_true', help='Scrape reviews')
     parser.add_argument('--account', dest='account', action='store_true', help='Scrape account metadata')
+    parser.add_argument('--pid', type=str, help='Scrape specific post id of account')
     # parser.add_argument('--t', type=str, help='Target hashtag to scrape posts')
     parser.set_defaults(review=False, account=False)
 
@@ -42,7 +43,12 @@ if __name__ == '__main__':
     # ig account credentials (needed for posts, not for users data)
     fb_credentials = json.load(open('credentials.json', 'r'))
     with FacebookScraper(fb_credentials) as scraper:
-        if scraper.login():
+
+        if args.pid:
+            p = scraper.get_post(args.u, args.pid)
+            print(p)
+
+        elif scraper.login():
 
             # account metadata
             if args.account:

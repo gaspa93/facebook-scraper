@@ -8,6 +8,7 @@ import time
 import logging
 import re
 import traceback
+import requests
 
 URL_ACCOUNT = "http://www.facebook.com/{}"
 URL_REVIEWS = "http://www.facebook.com/{}/reviews"
@@ -17,10 +18,13 @@ rating_regex = re.compile('_51mq\simg(\ssp_(.){11}\ssx_(.){6})?')
 
 class FacebookScraper:
 
-    def __init__(self, credentials):
+    def __init__(self, credentials, logger=None):
         self.login_ = credentials
         self.driver = self.__get_driver()
-        self.logger = self.__get_logger()
+        if logger:
+            self.logger = logger
+        else:
+            self.logger = self.__get_logger()
 
 
     def __enter__(self):
@@ -154,11 +158,22 @@ class FacebookScraper:
         for idx, post in enumerate(post_list):
             # save the ones just loaded with the scroll
             if idx >= offset:
-                p = self.__get_post_data(post)
+                p = self.__get_timeline_post(post)
                 if p != {}:
                     parsed_posts.append(p)
 
         return parsed_posts
+
+
+    # return available data of single post given its id and username
+    def get_post(self, username, pid):
+        url = URL_POSTS.format(username) + pid
+        self.driver.get(url)
+        self.__expand_content()
+
+        resp = BeautifulSoup(self.driver.page_source, 'html.parser')
+
+        return self.__get_post_data(resp.find('div', class_='_5pcr userContentWrapper'))
 
 
     # TODO: hashtag search
@@ -217,7 +232,7 @@ class FacebookScraper:
         return review
 
 
-    def __get_post_data(self, p):
+    def __get_timeline_post(self, p):
 
         pinned = p.find('i', class_='_5m7w img sp_bjbQDwUU8b8 sx_81fd46')
 
@@ -284,7 +299,68 @@ class FacebookScraper:
 
             return post
 
-        return {}
+        else:
+            return {}
+
+
+    def __get_post_data(self, p):
+        post = {}
+
+        rawid = p.find('div', class_='_5pcp _5lel _2jyu _232_')['id']
+        date = datetime.strptime(p.find('abbr', class_='_5ptz')['title'], '%m/%d/%y, %H:%M %p')
+        timestamp = date
+        date = str(date)  # db consistency
+
+        post['id_post'] = rawid
+        post['date'] = date
+        post['timestamp'] = timestamp
+
+        # image url and description
+        try:
+            img = p.find('img', class_='scaledImageFitWidth img')
+            img_url = img['src']  #.encode('utf-8')
+            img_desc = filterString(img['alt'])
+
+            post['img_url'] = img_url
+            post['img_desc'] = img_desc
+        except Exception as e:
+            img_url = None
+            img_desc = None
+
+        reactions = self.__get_reactions(p)
+        shares = self.__get_shares(p)
+        comments = self.__get_comments(p)
+
+        if len(reactions) > 0:
+            post['reactions'] = reactions
+
+        post['comments'] = comments
+        post['shares'] = shares
+
+        # content of post
+        text_div = p.find('div', class_='_5pbx userContent _3576')
+        if text_div is not None:
+            caption = self.__filterString(text_div.text).replace('See More','') # even if click to expand, this text is appended at the end
+            post['caption'] = caption
+        else:
+            caption = None
+
+        # check presence of event
+        try:
+            event = p.find('span', class_='fcg')
+            links = event.find_all('a', class_='profileLink')
+            # print links
+            if len(links) > 1:
+                event_link = links[1]['href']
+            else:
+                event_link = None
+        except:
+            event_link = None
+
+        post['event'] = event_link
+
+        return post
+
 
     # load review complete text
     def __expand_content(self):
@@ -299,20 +375,22 @@ class FacebookScraper:
 
     def __get_shares(self, p):
         try:
-            shares = int(p.find('a', class_='_3rwx _42ft').text.split(': ')[1])
-        except:
+            raw_shares = p.find('a', class_='_3rwx _42ft').text  # .split(': ')[1]
+            shares = int(re.search(r"(\d+)\s|\s(\d+)", raw_shares).group(0))
+        except Exception as e:
             shares = 0
-            self.logger.warn('Share element not found.')
+            self.logger.warn('Share element not found: {}'.format(e))
 
         return shares
 
 
     def __get_comments(self, p):
         try:
-            comments = int(p.find('a', class_='_3hg- _42ft').text.split(': ')[1])
-        except:
+            raw_comments = p.find('a', class_='_3hg- _42ft').text   # .split(': ')[1]
+            comments = int(re.search(r"\s(\d+)", raw_comments).group(0))
+        except Exception as e:
             comments = 0
-            self.logger.warn('Comment element not found.')
+            self.logger.warn('Comment element not found: {}'.format(e))
 
         return comments
 
@@ -321,20 +399,14 @@ class FacebookScraper:
         reactions_elem = p.find_all('a', class_='_1n9l')
 
         reactions = []
-        try:
-            for r in reactions_elem:
-                if 'Mi piace' in r['aria-label']:
-                    value, key1, key2 = r['aria-label'].split(' ')
-                    key = key1 + ' ' + key2
-                else:
-                    value, key = r['aria-label'].split(' ')
-
+        for r in reactions_elem:
+            try:
+                keyval = re.search(r"(\d+)\s(.+)", r['aria-label'])
+                value = keyval.group(1)
+                key = keyval.group(2)
                 reactions.append(key + ': ' + value)
-        except:
-            pass
-
-        if len(reactions) == 0:
-            self.logger.warn('Reactions element not found.')
+            except Exception as e:
+                self.logger.warn('Problem with reaction element {}: {}'.format(r, e))
 
         return reactions
 
